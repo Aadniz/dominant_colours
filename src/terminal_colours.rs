@@ -25,11 +25,17 @@ const ANSI_COLOUR_TABLE: [[u8; 3]; 16] = [
 
 // Takes a vector of colours in the Srgb<u8> format and returns a vector of colours
 // in the same format, but mapped to the closest colour in the ANSI colour table.
-pub fn create_terminal_colour(colours: Vec<Srgb<u8>>) -> Vec<Srgb<u8>> {
+pub fn create_terminal_colour(colours: Vec<Srgb<u8>>, max_brightness : bool) -> Vec<Srgb<u8>> {
     let colours : Vec<[u8; 3]> = colours.iter().map(|rgb| [rgb.red, rgb.green, rgb.blue]).collect();
 
     let mut result: Vec<Srgb<u8>> = Vec::new();
-    for unix_colour in ANSI_COLOUR_TABLE {
+
+    // If max_brightness is set, replace 8 > i > 0 i with i + 8
+    let colour_table: Vec<[u8; 3]> = if max_brightness {
+        ANSI_COLOUR_TABLE.iter().enumerate().map(|(i, &x)| if i > 0 && i < 8 { ANSI_COLOUR_TABLE[i + 8] } else { x }).collect()
+    } else { ANSI_COLOUR_TABLE.to_vec() };
+
+    for unix_colour in colour_table {
 
         // Find the colour with the closest distance to the ANSI colour table
         let mut smallest_distance = f64::MAX;

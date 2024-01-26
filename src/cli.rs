@@ -45,6 +45,12 @@ pub fn app() -> Command {
                 .help("Generate 16 colours for the terminal")
                 .action(ArgAction::SetTrue),
         )
+        .arg(
+            Arg::new("max-brightness")
+                .long("max-brightness")
+                .help("For terminal-colours, ignore darker colours and only generate the bright ones")
+                .action(ArgAction::SetTrue),
+        )
 }
 
 #[cfg(test)]

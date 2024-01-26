@@ -24,6 +24,9 @@ fn main() {
     let random_seed = matches
         .get_flag("random-seed");
 
+    let max_brightness = matches
+        .get_flag("max-brightness");
+
     let seed: u64 = if random_seed { random() } else {
         *matches
             .get_one::<u64>("SEED")
@@ -64,7 +67,7 @@ fn main() {
         .collect();
 
     let rgb = if terminal_colours {
-        terminal_colours::create_terminal_colour(srgb_colors)
+        terminal_colours::create_terminal_colour(srgb_colors, max_brightness)
     } else {
         srgb_colors
     };
