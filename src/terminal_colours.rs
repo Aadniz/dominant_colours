@@ -30,7 +30,7 @@ pub fn create_terminal_colour(colours: Vec<Srgb<u8>>, max_brightness : bool) -> 
 
     let mut result: Vec<Srgb<u8>> = Vec::new();
 
-    // If max_brightness is set, replace 8 > i > 0 i with i + 8
+    // If max_brightness is set, replace 8 > i > 0 with i + 8
     let colour_table: Vec<[u8; 3]> = if max_brightness {
         ANSI_COLOUR_TABLE.iter().enumerate().map(|(i, &x)| if i > 0 && i < 8 { ANSI_COLOUR_TABLE[i + 8] } else { x }).collect()
     } else { ANSI_COLOUR_TABLE.to_vec() };
