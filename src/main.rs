@@ -3,12 +3,13 @@
 #[macro_use]
 extern crate clap;
 
-use kmeans_colors::get_kmeans_hamerly;
-use rand::random;
-use palette::{FromColor, IntoColor, Pixel, Lab, Srgb, Srgba};
+use palette::{FromColor, Lab, Srgb};
 
 mod cli;
-mod get_bytes;
+mod find_dominant_colors;
+use rand::random;
+mod get_image_colors;
+mod printing;
 mod terminal_colours;
 
 fn main() {
@@ -18,74 +19,52 @@ fn main() {
         .get_one::<String>("PATH")
         .expect("`path` is required");
 
-    let terminal_colours = matches
-        .get_flag("terminal-colours");
+    let terminal_colours = matches.get_flag("terminal-colours");
 
-    let random_seed = matches
-        .get_flag("random-seed");
+    let random_seed = matches.get_flag("random-seed");
 
-    let max_brightness = matches
-        .get_flag("max-brightness");
+    let max_brightness = matches.get_flag("max-brightness");
 
-    let seed: u64 = if random_seed { random() } else {
-        *matches
-            .get_one::<u64>("SEED")
-            .expect("`seed` is required")
+    let seed: u64 = if random_seed {
+        random()
+    } else {
+        *matches.get_one::<u64>("SEED").expect("`seed` is required")
     };
 
     let colour_count = *matches
-        .get_one::<usize>("MAX-COLOURS")
-        .expect("`max-colours` is required");
+        .get_one::<usize>("MAX_COLOURS")
+        .expect("Failed to parse MAX-COLOURS into a usize");
 
-    let colour_count: usize = if terminal_colours && 16 > colour_count { 16 } else { colour_count };
-
-    // There's different code for fetching bytes from GIF images because
-    // GIFs are often animated, and we want a selection of frames.
-    let img_bytes = if path.to_lowercase().ends_with(".gif") {
-        get_bytes::get_bytes_for_gif(&path)
+    let colour_count: usize = if terminal_colours && 16 > colour_count {
+        16
     } else {
-        get_bytes::get_bytes_for_image(&path)
+        colour_count
     };
 
-    // This is based on code from the kmeans-colors binary, but with a bunch of
-    // the options stripped out.
-    // See https://github.com/okaneco/kmeans-colors/blob/0.5.0/src/bin/kmeans_colors/app.rs
-    let lab: Vec<Lab> = Srgba::from_raw_slice(&img_bytes)
+    let lab: Vec<Lab> = get_image_colors::get_image_colors(&path);
+
+    let dominant_colors = find_dominant_colors::find_dominant_colors(&lab, colour_count, seed);
+
+    let background = matches.get_one::<Srgb<u8>>("BACKGROUND_HEX");
+
+    let selected_colors = match background {
+        Some(bg) => find_dominant_colors::choose_best_color_for_bg(dominant_colors.clone(), bg),
+        None => dominant_colors,
+    };
+
+    let rgb_colors = selected_colors
         .iter()
-        .map(|x| x.into_format::<_, f32>().into_color())
-        .collect();
-
-    let max_iterations = 20;
-    let converge = 1.0;
-    let verbose = false;
-
-    let result = get_kmeans_hamerly(colour_count, max_iterations, converge, verbose, &lab, seed).centroids;
-
-    let srgb_colors = result
-        .iter()
-        .map(|x| Srgb::from_color(*x).into_format())
-        .collect();
+        .map(|c| Srgb::from_color(*c).into_format())
+        .collect::<Vec<Srgb<u8>>>();
 
     let rgb = if terminal_colours {
-        terminal_colours::create_terminal_colour(srgb_colors, max_brightness)
+        terminal_colours::create_terminal_colour(rgb_colors, max_brightness)
     } else {
-        srgb_colors
+        rgb_colors
     };
 
-    // This uses ANSI escape sequences and Unicode block elements to print
-    // a palette of hex strings which are coloured to match.
-    // See https://alexwlchan.net/2021/04/coloured-squares/
     for c in rgb {
-        let display_value = format!("#{:02x}{:02x}{:02x}", c.red, c.green, c.blue);
-
-        if matches.get_flag("no-palette") {
-            println!("{}", display_value);
-        } else {
-            println!(
-                "\x1B[38;2;{};{};{}m▇ {}\x1B[0m",
-                c.red, c.green, c.blue, display_value
-            );
-        }
+        printing::print_color(c, &background, matches.get_flag("no-palette"));
     }
 }
 
@@ -180,7 +159,12 @@ mod tests {
 
     #[test]
     fn it_lets_you_choose_the_seed() {
-        let output = get_success(&["./src/tests/noise.jpg", "--max-colours=1", "--seed", "123456789"]);
+        let output = get_success(&[
+            "./src/tests/noise.jpg",
+            "--max-colours=1",
+            "--seed",
+            "123456789",
+        ]);
 
         assert_eq!(output.stdout.contains("#85827f"), true);
     }
@@ -190,10 +174,7 @@ mod tests {
         let output1 = get_success(&["./src/tests/noise.jpg", "--random-seed"]);
         let output2 = get_success(&["./src/tests/noise.jpg", "--random-seed"]);
 
-        assert_ne!(
-            output1.stdout,
-            output2.stdout
-        );
+        assert_ne!(output1.stdout, output2.stdout);
     }
 
     // The image created in the next two tests was created with the
@@ -228,7 +209,11 @@ mod tests {
 
     #[test]
     fn it_still_prints_16_colours_when_max_colours_and_terminal_colours_are_set() {
-        let output = get_success(&["./src/tests/terminal_colours.png", "--terminal-colours", "--max-colours=20"]);
+        let output = get_success(&[
+            "./src/tests/terminal_colours.png",
+            "--terminal-colours",
+            "--max-colours=20",
+        ]);
 
         assert_eq!(output.exit_code, 0);
 
@@ -244,7 +229,11 @@ mod tests {
     // This is on purpose to test that slight variation gets handled.
     #[test]
     fn it_prints_the_ansi_terminal_colours_mapped_correctly() {
-        let output = get_success(&["./src/tests/terminal_colours.png", "--terminal-colours", "--no-palette"]);
+        let output = get_success(&[
+            "./src/tests/terminal_colours.png",
+            "--terminal-colours",
+            "--no-palette",
+        ]);
 
         assert_eq!(output.exit_code, 0);
 
@@ -280,7 +269,7 @@ mod tests {
         assert_eq!(output.stdout, "");
         assert_eq!(
             output.stderr,
-            "error: Invalid value 'NaN' for '--max-colours <MAX-COLOURS>': invalid digit found in string\n\nFor more information try '--help'\n"
+            "error: invalid value 'NaN' for '--max-colours <MAX_COLOURS>': invalid digit found in string\n\nFor more information, try '--help'.\n"
         );
     }
 
@@ -320,19 +309,16 @@ mod tests {
 
         assert_eq!(output.exit_code, 1);
         assert_eq!(output.stdout, "");
-        assert_eq!(
-            output.stderr,
-            "The file extension `.\"md\"` was not recognized as an image format\n"
-        );
+        assert_eq!(output.stderr, "The image format could not be determined\n");
     }
 
     #[test]
     fn it_fails_if_you_pass_an_unsupported_image_format() {
-        let output = get_failure(&["./src/tests/purple.webp"]);
+        let output = get_failure(&["./src/tests/orange.heic"]);
 
         assert_eq!(output.exit_code, 1);
         assert_eq!(output.stdout, "");
-        assert_eq!(output.stderr, "The image format WebP is not supported\n");
+        assert_eq!(output.stderr, "The image format could not be determined\n");
     }
 
     #[test]
@@ -345,6 +331,30 @@ mod tests {
             output.stderr,
             "Format error decoding Png: Invalid PNG signature.\n"
         );
+    }
+
+    #[test]
+    fn it_chooses_the_right_color_for_a_dark_background() {
+        let output = get_success(&[
+            "src/tests/stripes.png",
+            "--max-colours=5",
+            "--best-against-bg=#222",
+            "--no-palette",
+        ]);
+
+        assert_eq!(output.stdout, "#d4fb79\n");
+    }
+
+    #[test]
+    fn it_chooses_the_right_color_for_a_light_background() {
+        let output = get_success(&[
+            "src/tests/stripes.png",
+            "--max-colours=5",
+            "--best-against-bg=#fff",
+            "--no-palette",
+        ]);
+
+        assert_eq!(output.stdout, "#693900\n");
     }
 
     struct DcOutput {

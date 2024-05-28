@@ -1,5 +1,18 @@
 # Changelog
 
+## v1.2.0 - 2024-05-12
+
+Two new features:
+
+*   Add support for WebP images.
+*   Add an experimental new flag `--best-against-bg=[HEX_COLOUR]` that will print the single colour which will look best against this background.
+
+## v1.1.9 - 2024-05-12
+
+Bump the version of all the dependency libraries, and try to get the release process working again.
+
+This has no feature changes.
+
 ## v1.1.8 - 2022-10-24
 
 More internal refactoring to use newer versions of kmeans-colors and palette.
