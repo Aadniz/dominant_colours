@@ -281,7 +281,7 @@ mod tests {
         assert_eq!(output.stdout, "");
         assert_eq!(
             output.stderr,
-            "error: Invalid value 'NaN' for '--seed <SEED>': invalid digit found in string\n\nFor more information try '--help'\n"
+            "error: invalid value 'NaN' for '--seed <SEED>': invalid digit found in string\n\nFor more information, try '--help'.\n"
         );
     }
 
